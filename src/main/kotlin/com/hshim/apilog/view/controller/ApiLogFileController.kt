@@ -28,7 +28,7 @@ import java.io.FileNotFoundException
 @CrossOrigin
 @RequestMapping("\${apilog.view.base-path:/apilog}")
 class ApiLogFileController(
-    private val fileService: ApiLogFileService,
+    private val fileService: ApiLogFileService, 
 ) {
 
     /**
