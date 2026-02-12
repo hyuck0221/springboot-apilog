@@ -7,8 +7,10 @@ import com.hshim.apilog.storage.db.ApiLogDbStorage
 import com.hshim.apilog.storage.local.ApiLogLocalFileStorage
 import com.hshim.apilog.storage.supabase.ApiLogSupabaseDbStorage
 import com.hshim.apilog.storage.supabase.ApiLogSupabaseS3Storage
+import com.hshim.apilog.view.controller.ApiLogFileController
 import com.hshim.apilog.view.controller.ApiLogViewController
 import com.hshim.apilog.view.filter.ApiLogViewAuthFilter
+import com.hshim.apilog.view.service.ApiLogFileService
 import com.hshim.apilog.view.service.ApiLogViewService
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -120,6 +122,30 @@ class ApiLogAutoConfiguration {
      * GET  {basePath}/logs/apps          Distinct application names
      * ```
      */
+    /**
+     * Sub-configuration for the file browsing API endpoints.
+     *
+     * Activated when `apilog.view.enabled=true`. Does NOT require a DataSource,
+     * so it works even when only local-file storage is used.
+     *
+     * Endpoints:
+     * ```
+     * GET {basePath}/files           List log files in a directory
+     * GET {basePath}/files/content   Return raw text content of a file
+     * ```
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnProperty(prefix = "apilog.view", name = ["enabled"], havingValue = "true")
+    class FileConfiguration {
+
+        @Bean
+        fun apiLogFileService(): ApiLogFileService = ApiLogFileService()
+
+        @Bean
+        fun apiLogFileController(fileService: ApiLogFileService): ApiLogFileController =
+            ApiLogFileController(fileService)
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(JdbcTemplate::class)
     @ConditionalOnProperty(prefix = "apilog.view", name = ["enabled"], havingValue = "true")
