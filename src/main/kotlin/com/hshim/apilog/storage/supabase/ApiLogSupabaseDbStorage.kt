@@ -1,0 +1,133 @@
+package com.hshim.apilog.storage.supabase
+
+import com.hshim.apilog.config.ApiLogProperties
+import com.hshim.apilog.model.ApiLogEntry
+import com.hshim.apilog.storage.ApiLogStorage
+import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
+import org.slf4j.LoggerFactory
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.DriverManagerDataSource
+import tools.jackson.databind.ObjectMapper
+import java.sql.Timestamp
+
+/**
+ * [ApiLogStorage] implementation that persists log entries to a **Supabase PostgreSQL** database
+ * using a dedicated JDBC connection — independent of the application's own DataSource.
+ *
+ * This allows logging to Supabase DB even when the app itself uses a different database.
+ *
+ * Requires the PostgreSQL JDBC driver on the classpath:
+ * ```kotlin
+ * implementation("org.postgresql:postgresql")
+ * ```
+ *
+ * **JDBC URL formats**
+ * - Direct connection:  `jdbc:postgresql://db.[project-ref].supabase.co:5432/postgres`
+ * - Connection pooler:  `jdbc:postgresql://aws-0-[region].pooler.supabase.com:6543/postgres`
+ *
+ * Find credentials in **Supabase Dashboard → Project Settings → Database**.
+ */
+class ApiLogSupabaseDbStorage(
+    private val properties: ApiLogProperties,
+    private val objectMapper: ObjectMapper,
+) : ApiLogStorage {
+
+    private val log = LoggerFactory.getLogger(ApiLogSupabaseDbStorage::class.java)
+    private val supabaseDbProps = properties.storage.supabaseDb
+    private lateinit var jdbcTemplate: JdbcTemplate
+    private lateinit var dataSource: DriverManagerDataSource
+
+    @PostConstruct
+    fun init() {
+        require(supabaseDbProps.jdbcUrl.isNotBlank()) {
+            "apilog.storage.supabase-db.jdbc-url must not be blank"
+        }
+        require(supabaseDbProps.password.isNotBlank()) {
+            "apilog.storage.supabase-db.password must not be blank"
+        }
+
+        dataSource = DriverManagerDataSource().apply {
+            setDriverClassName("org.postgresql.Driver")
+            url = supabaseDbProps.jdbcUrl
+            username = supabaseDbProps.username
+            password = supabaseDbProps.password
+        }
+        jdbcTemplate = JdbcTemplate(dataSource)
+
+        if (supabaseDbProps.autoCreateTable) {
+            createTableIfNotExists()
+        }
+
+        log.info("ApiLog Supabase DB storage initialized. Table: ${supabaseDbProps.tableName}")
+    }
+
+    private fun createTableIfNotExists() {
+        try {
+            jdbcTemplate.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ${supabaseDbProps.tableName} (
+                    id                    VARCHAR(36)  PRIMARY KEY,
+                    app_name              VARCHAR(255),
+                    url                   TEXT         NOT NULL,
+                    method                VARCHAR(10)  NOT NULL,
+                    query_params          TEXT,
+                    request_headers       TEXT,
+                    request_body          TEXT,
+                    response_status       INT,
+                    response_content_type VARCHAR(255),
+                    response_body         TEXT,
+                    request_time          TIMESTAMPTZ  NOT NULL,
+                    response_time         TIMESTAMPTZ  NOT NULL,
+                    processing_time_ms    BIGINT       NOT NULL,
+                    server_name           VARCHAR(255),
+                    server_port           INT,
+                    remote_addr           VARCHAR(255),
+                    created_at            TIMESTAMPTZ  DEFAULT NOW()
+                )
+                """.trimIndent(),
+            )
+            log.info("Supabase DB table '${supabaseDbProps.tableName}' is ready.")
+        } catch (e: Exception) {
+            log.warn(
+                "Could not create table '${supabaseDbProps.tableName}' in Supabase DB. " +
+                    "It may already exist or you may have insufficient permissions.",
+                e,
+            )
+        }
+    }
+
+    override fun save(entry: ApiLogEntry) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO ${supabaseDbProps.tableName}
+            (id, app_name, url, method, query_params, request_headers, request_body,
+             response_status, response_content_type, response_body,
+             request_time, response_time, processing_time_ms,
+             server_name, server_port, remote_addr)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            entry.id,
+            entry.appName,
+            entry.url,
+            entry.method,
+            objectMapper.writeValueAsString(entry.queryParams),
+            objectMapper.writeValueAsString(entry.requestHeaders),
+            entry.requestBody,
+            entry.responseStatus,
+            entry.responseContentType,
+            entry.responseBody,
+            Timestamp.valueOf(entry.requestTime),
+            Timestamp.valueOf(entry.responseTime),
+            entry.processingTimeMs,
+            entry.serverName,
+            entry.serverPort,
+            entry.remoteAddr,
+        )
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        // DriverManagerDataSource has no close method; connections are released automatically
+    }
+}

@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: apilog
+
+# ─── apilog example configuration ────────────────────────────────────────────
+apilog:
+  enabled: true
+
+  # Logical name of this application (included in every log entry as "appName")
+  app-name: my-service
+
+  # Ant-style path patterns to skip (supports ** wildcards)
+  exclude-paths:
+    - /actuator/**
+    - /swagger-ui/**
+    - /v3/api-docs/**
+    - /favicon.ico
+
+  # Request headers whose values are replaced with "***"
+  mask-headers:
+    - Authorization
+    - Cookie
+    - Set-Cookie
+
+  # Replace entire request/response body with "***"
+  mask-request-body: false
+  mask-response-body: false
+
+  # Maximum characters recorded for request/response bodies (excess is truncated)
+  max-body-size: 10000
+
+  storage:
+
+    # ── DB table storage ──────────────────────────────────────────────────────
+    db:
+      enabled: false
+      table-name: api_logs
+      auto-create-table: true        # CREATE TABLE IF NOT EXISTS on startup
+
+    # ── Local file storage ───────────────────────────────────────────────────
+    local-file:
+      enabled: false
+      path: ./logs/api               # Directory where log files are written
+      logs-per-file: 1000            # Entries per file before a new file is created
+      format: JSON                   # JSON (JSONL) or CSV
+
+    # ── Supabase DB storage (dedicated PostgreSQL connection) ─────────────────
+    supabase-db:
+      enabled: false
+      jdbc-url: jdbc:postgresql://db.<project-ref>.supabase.co:5432/postgres
+      username: postgres
+      password: <supabase-db-password>
+      table-name: api_logs
+      auto-create-table: true        # CREATE TABLE IF NOT EXISTS on startup
+
+    # ── Supabase S3 storage ──────────────────────────────────────────────────
+    supabase-s3:
+      enabled: false
+      endpoint-url: https://<project-ref>.supabase.co/storage/v1/s3
+      access-key-id: <supabase-project-ref>
+      secret-access-key: <supabase-service-role-key>
+      region: ap-northeast-1
+      bucket: api-logs
+      key-prefix: logs/              # S3 object key prefix (folder)
+      logs-per-file: 1000
+      format: JSON                   # JSON (JSONL) or CSV
+
+    # ── HTTP storage (push to apilog-view server) ─────────────────────────────
+    http:
+      enabled: false
+      endpoint-url: http://apilog-view:8080/apilog/logs/receive
+      timeout-ms: 5000               # Connection + read timeout in ms
+      async: true                    # Fire-and-forget (does not block request thread)
+
+  # ── View API (enable on the central apilog-view server) ────────────────────
+  view:
+    enabled: false
+    base-path: /apilog               # Base path for all view API endpoints
