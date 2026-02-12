@@ -1,7 +1,7 @@
 # apilog
 
 모든 HTTP API 요청과 응답을 자동으로 기록하는 Spring Boot + Kotlin 라이브러리입니다.
-**DB 테이블**, **Supabase S3**, **로컬 파일**, **HTTP 푸시** (중앙 `apilog-view` 서버로 전송) 저장 방식을 동시에 복수 선택하여 사용할 수 있습니다.
+**DB 테이블**, **Supabase DB**, **Supabase S3**, **로컬 파일** 저장 방식을 동시에 복수 선택하여 사용할 수 있습니다.
 
 [English](./README.md)
 
@@ -11,9 +11,9 @@
 
 | 구성 요소   | 버전   |
 |-------------|--------|
-| Spring Boot | 4.0+   |
-| Kotlin      | 2.0+   |
-| Java        | 21+    |
+| Spring Boot | 3.0+   |
+| Kotlin      | 1.9+   |
+| Java        | 17+    |
 
 > **DB 저장**과 **View API**를 사용하려면 `spring-boot-starter-jdbc`와 `DataSource` 설정이 추가로 필요합니다.
 
@@ -102,12 +102,6 @@ apilog:
       key-prefix: logs/
       logs-per-file: 1000
       format: JSON
-
-    http:
-      enabled: false
-      endpoint-url: http://apilog-view:8080/apilog/logs/receive
-      timeout-ms: 5000                   # 연결 + 읽기 타임아웃 (기본값: 5000ms)
-      async: true                        # 비동기 전송, 요청 스레드 블로킹 없음 (기본값: true)
 
   view:
     enabled: false                       # View API 활성화 여부 (기본값: false)
@@ -222,16 +216,6 @@ apilog:
 
 ---
 
-### HTTP (apilog-view로 푸시)
-
-각 로그 항목을 JSON `POST` 방식으로 원격 HTTP 엔드포인트에 전송합니다.
-
-- 여러 서비스의 로그를 중앙 `apilog-view` 서버로 수집할 때 사용합니다.
-- `async: true`(기본값)이면 백그라운드 가상 스레드(Virtual Thread)에서 전송되어 요청 지연에 영향을 주지 않습니다.
-- 전송 실패는 로그에 기록되고 조용히 드랍됩니다. 호출자에게 전파되지 않습니다.
-
----
-
 ## View API (apilog-view 프론트엔드 제공 API)
 
 `apilog-view` 서버 역할을 할 애플리케이션에 활성화합니다:
@@ -244,6 +228,26 @@ apilog:
   view:
     enabled: true
     base-path: /apilog
+    api-key: your-secret-key          # 선택 — 비워두면 인증 없이 접근 가능
+```
+
+### API Key 인증
+
+`apilog.view.api-key`에 값을 설정하면 View API의 **모든 요청**에 아래 헤더가 필요합니다:
+
+```
+X-Api-Key: your-secret-key
+```
+
+| 조건                              | 결과                          |
+|-----------------------------------|-------------------------------|
+| `api-key` 미설정 (기본값)         | 인증 없이 접근 가능           |
+| `api-key` 설정 + 헤더 일치        | `200 OK` — 요청 통과          |
+| `api-key` 설정 + 헤더 없거나 불일치 | `401 Unauthorized`           |
+
+**401 응답 바디:**
+```json
+{"status": 401, "error": "Unauthorized", "message": "Invalid or missing X-Api-Key header"}
 ```
 
 ### 엔드포인트 목록
@@ -290,15 +294,18 @@ apilog:
 
 ## 멀티 애플리케이션 아키텍처
 
+View API의 `POST /apilog/logs/receive` 엔드포인트를 통해 다른 서비스에서 로그를 수집할 수 있습니다.
+각 서비스에서 [커스텀 저장 백엔드](#커스텀-저장-백엔드)를 구현하여 중앙 서버로 로그를 전송하세요.
+
 ```
- ┌─────────────────┐  HTTP POST /apilog/logs/receive
+ ┌─────────────────┐  POST /apilog/logs/receive
  │  order-service  │─────────────────────────────────┐
- │  (apilog 라이브러리) │                             │
+ │  (커스텀 푸시)   │                                 │
  └─────────────────┘                                 ▼
                                            ┌──────────────────────┐
- ┌─────────────────┐  HTTP POST            │  apilog-view 서버    │
+ ┌─────────────────┐  POST                 │  apilog-view 서버    │
  │  user-service   │──────────────────────▶│  (apilog 라이브러리  │
- │  (apilog 라이브러리) │                  │   + view.enabled=true)│
+ │  (커스텀 푸시)   │                       │   + view.enabled=true)│
  └─────────────────┘                       └──────────┬───────────┘
                                                       │ GET /apilog/logs/**
                                                       ▼
@@ -306,16 +313,6 @@ apilog:
                                            │   apilog-view        │
                                            │   (프론트엔드)        │
                                            └──────────────────────┘
-```
-
-**order-service / user-service** `application.yml`
-```yaml
-apilog:
-  app-name: order-service   # 또는 user-service
-  storage:
-    http:
-      enabled: true
-      endpoint-url: http://apilog-view-server:8080/apilog/logs/receive
 ```
 
 **apilog-view 서버** `application.yml`

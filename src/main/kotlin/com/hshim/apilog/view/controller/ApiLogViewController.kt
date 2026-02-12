@@ -33,7 +33,8 @@ import org.springframework.web.bind.annotation.RestController
  * | GET    | `{base}/logs/apps`            | Distinct application names                     |
  */
 @RestController
-@CrossOrigin   // Allow apilog-view frontend on a different origin
+@CrossOrigin
+@RequestMapping("\${apilog.view.base-path:/apilog}")
 class ApiLogViewController(
     private val viewService: ApiLogViewService,
     private val storagesProvider: ObjectProvider<ApiLogStorage>,
@@ -41,20 +42,7 @@ class ApiLogViewController(
 
     // ── Ingestion ─────────────────────────────────────────────────────────────
 
-    /**
-     * Receives a single [ApiLogEntry] from a remote application and persists it
-     * through all active [ApiLogStorage] implementations (typically DB).
-     *
-     * This endpoint is called by services configured with:
-     * ```yaml
-     * apilog:
-     *   storage:
-     *     http:
-     *       enabled: true
-     *       endpoint-url: http://<this-server>/apilog/logs/receive
-     * ```
-     */
-    @PostMapping("#{'\${apilog.view.base-path:/apilog}'}/logs/receive")
+    @PostMapping("/logs/receive")
     fun receive(@RequestBody entry: ApiLogEntry): ResponseEntity<Void> {
         storagesProvider.orderedStream().forEach { it.save(entry) }
         return ResponseEntity.accepted().build()
@@ -62,26 +50,12 @@ class ApiLogViewController(
 
     // ── Query ─────────────────────────────────────────────────────────────────
 
-    /**
-     * Returns a paginated, filtered list of log entries.
-     *
-     * **Query parameters**
-     * - `appName` — exact match on application name
-     * - `method` — HTTP method (GET, POST, …)
-     * - `url` — URL path; supports `%` wildcard (SQL LIKE)
-     * - `statusCode` — HTTP response status code
-     * - `startTime` / `endTime` — ISO-8601 datetime range for `requestTime`
-     * - `minProcessingTimeMs` — minimum processing time filter
-     * - `page` (default 0), `size` (default 20, max 200)
-     * - `sortBy` — column name: `request_time`, `processing_time_ms`, `response_status`, `url`, `method`, `app_name`
-     * - `sortDir` — `ASC` or `DESC` (default `DESC`)
-     */
-    @GetMapping("#{'\${apilog.view.base-path:/apilog}'}/logs")
+    @GetMapping("/logs")
     fun list(
         @RequestParam(required = false) appName: String?,
         @RequestParam(required = false) method: String?,
         @RequestParam(required = false) url: String?,
-        @RequestParam(required = false) statusCode: Int?,
+        @RequestParam(required = false) statusCode: String?,
         @RequestParam(required = false) startTime: String?,
         @RequestParam(required = false) endTime: String?,
         @RequestParam(required = false) minProcessingTimeMs: Long?,
@@ -105,31 +79,18 @@ class ApiLogViewController(
         ),
     )
 
-    /**
-     * Returns a single log entry by its UUID.
-     * Responds with `404 Not Found` if no entry matches.
-     */
-    @GetMapping("#{'\${apilog.view.base-path:/apilog}'}/logs/{id}")
+    @GetMapping("/logs/{id}")
     fun getById(@PathVariable id: String): ResponseEntity<ApiLogEntry> {
         val entry = viewService.findById(id)
         return if (entry != null) ResponseEntity.ok(entry) else ResponseEntity.notFound().build()
     }
 
-    /**
-     * Returns aggregated statistics.
-     *
-     * Optionally scoped to a time range using `startTime` / `endTime` (ISO-8601).
-     */
-    @GetMapping("#{'\${apilog.view.base-path:/apilog}'}/logs/stats")
+    @GetMapping("/logs/stats")
     fun stats(
         @RequestParam(required = false) startTime: String?,
         @RequestParam(required = false) endTime: String?,
     ): ApiLogStats = viewService.stats(startTime, endTime)
 
-    /**
-     * Returns a sorted list of distinct application names that have submitted logs.
-     * Useful for populating an app-name filter dropdown in the frontend.
-     */
-    @GetMapping("#{'\${apilog.view.base-path:/apilog}'}/logs/apps")
+    @GetMapping("/logs/apps")
     fun listApps(): List<String> = viewService.listApps()
 }

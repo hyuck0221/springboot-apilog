@@ -1,8 +1,8 @@
 package com.hshim.apilog.storage.file
 
 import com.hshim.apilog.config.LogFileFormat
+import com.hshim.apilog.internal.ApiLogMapper
 import com.hshim.apilog.model.ApiLogEntry
-import tools.jackson.databind.ObjectMapper
 import java.io.BufferedWriter
 import java.time.format.DateTimeFormatter
 
@@ -25,22 +25,20 @@ internal object ApiLogFileWriter {
         writer: BufferedWriter,
         entries: List<ApiLogEntry>,
         format: LogFileFormat,
-        objectMapper: ObjectMapper,
         writeHeader: Boolean = true,
     ) {
         when (format) {
-            LogFileFormat.JSON -> writeJsonLines(writer, entries, objectMapper)
-            LogFileFormat.CSV -> writeCsv(writer, entries, objectMapper, writeHeader)
+            LogFileFormat.JSON -> writeJsonLines(writer, entries)
+            LogFileFormat.CSV -> writeCsv(writer, entries, writeHeader)
         }
     }
 
     private fun writeJsonLines(
         writer: BufferedWriter,
         entries: List<ApiLogEntry>,
-        objectMapper: ObjectMapper,
     ) {
         entries.forEach { entry ->
-            writer.write(objectMapper.writeValueAsString(entry))
+            writer.write(ApiLogMapper.toJson(entry))
             writer.newLine()
         }
     }
@@ -48,7 +46,6 @@ internal object ApiLogFileWriter {
     private fun writeCsv(
         writer: BufferedWriter,
         entries: List<ApiLogEntry>,
-        objectMapper: ObjectMapper,
         writeHeader: Boolean,
     ) {
         if (writeHeader) {
@@ -60,8 +57,8 @@ internal object ApiLogFileWriter {
                 entry.id.csvEscape(),
                 entry.url.csvEscape(),
                 entry.method.csvEscape(),
-                objectMapper.writeValueAsString(entry.queryParams).csvEscape(),
-                objectMapper.writeValueAsString(entry.requestHeaders).csvEscape(),
+                ApiLogMapper.toJson(entry.queryParams).csvEscape(),
+                ApiLogMapper.toJson(entry.requestHeaders).csvEscape(),
                 (entry.requestBody ?: "").csvEscape(),
                 entry.responseStatus.toString(),
                 (entry.responseContentType ?: "").csvEscape(),

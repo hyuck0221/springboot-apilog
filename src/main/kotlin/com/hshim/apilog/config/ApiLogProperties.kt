@@ -24,6 +24,14 @@ data class ApiLogProperties(
      */
     val appName: String = "",
 
+    /**
+     * Ant-style URL path patterns to include for logging (whitelist).
+     * When non-empty, only requests matching at least one pattern are logged.
+     * Takes priority over [excludePaths].
+     * Example: "/api/**" logs only paths under /api/.
+     */*/
+    val includePaths: List<String> = emptyList(),
+
     /** Ant-style URL path patterns (wildcards supported) to exclude from logging. */
     val excludePaths: List<String> = emptyList(),
 
@@ -49,7 +57,6 @@ data class ApiLogProperties(
         val localFile: LocalFileStorageProperties = LocalFileStorageProperties(),
         val supabaseDb: SupabaseDbStorageProperties = SupabaseDbStorageProperties(),
         val supabaseS3: SupabaseS3StorageProperties = SupabaseS3StorageProperties(),
-        val http: HttpStorageProperties = HttpStorageProperties(),
     )
 
     // ── DB (app's own DataSource) ──────────────────────────────────────────────
@@ -76,6 +83,14 @@ data class ApiLogProperties(
 
         /** Number of log entries buffered before a new file is flushed. Default: 1000 */
         val logsPerFile: Int = 1000,
+
+        /**
+         * Interval in seconds at which buffered log entries are flushed to a file,
+         * regardless of whether [logsPerFile] has been reached.
+         * Useful for low-traffic environments where the buffer rarely fills up.
+         * Set to 0 to disable time-based flushing. Default: 0
+         */
+        val flushIntervalSeconds: Long = 0,
 
         /** Output file format. JSON produces JSONL; CSV produces a CSV with a header row. Default: JSON */
         val format: LogFileFormat = LogFileFormat.JSON,
@@ -144,31 +159,6 @@ data class ApiLogProperties(
         val format: LogFileFormat = LogFileFormat.JSON,
     )
 
-    // ── HTTP ──────────────────────────────────────────────────────────────────
-
-    data class HttpStorageProperties(
-        /**
-         * Enable HTTP storage — posts each log entry to a remote endpoint (e.g., an apilog-view server).
-         * Default: false
-         */
-        val enabled: Boolean = false,
-
-        /**
-         * URL of the remote endpoint that receives log entries.
-         * Example: http://apilog-view:8080/apilog/logs/receive
-         */
-        val endpointUrl: String = "",
-
-        /** HTTP connection and read timeout in milliseconds. Default: 5000 */
-        val timeoutMs: Int = 5000,
-
-        /**
-         * Send log entries asynchronously (fire-and-forget).
-         * When true the HTTP call does not block the request thread. Default: true
-         */
-        val async: Boolean = true,
-    )
-
     // ── View API ──────────────────────────────────────────────────────────────
 
     data class ViewProperties(
@@ -181,5 +171,12 @@ data class ApiLogProperties(
 
         /** Base path for all view API endpoints. Default: /apilog */
         val basePath: String = "/apilog",
+
+        /**
+         * When set, all view API requests must include the `X-Api-Key` header with this value.
+         * Requests with a missing or incorrect key receive a 401 Unauthorized response.
+         * Leave blank to disable authentication (open access). Default: "" (disabled)
+         */
+        val apiKey: String = "",
     )
 }

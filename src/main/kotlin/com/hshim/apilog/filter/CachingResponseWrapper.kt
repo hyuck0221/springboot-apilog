@@ -12,6 +12,10 @@ import java.io.PrintWriter
  * Intercepts all writes to the response output stream/writer, buffering them
  * in memory so the response body can be read after the handler completes.
  *
+ * Also captures the HTTP status code explicitly by overriding [setStatus] and
+ * [sendError], so that [status] always reflects the real response status even
+ * before the response is committed.
+ *
  * Call [copyBodyToResponse] at the end of the filter chain to flush the
  * buffered content to the actual underlying response.
  */
@@ -20,6 +24,7 @@ internal class CachingResponseWrapper(response: HttpServletResponse) : HttpServl
     private val buffer = ByteArrayOutputStream()
     private var cachedOutputStream: ServletOutputStream? = null
     private var cachedWriter: PrintWriter? = null
+    private var capturedStatus: Int = HttpServletResponse.SC_OK
 
     val cachedBody: ByteArray
         get() {
@@ -49,6 +54,23 @@ internal class CachingResponseWrapper(response: HttpServletResponse) : HttpServl
             )
         }
         return cachedWriter!!
+    }
+
+    override fun getStatus(): Int = capturedStatus
+
+    override fun setStatus(sc: Int) {
+        capturedStatus = sc
+        super.setStatus(sc)
+    }
+
+    override fun sendError(sc: Int) {
+        capturedStatus = sc
+        super.sendError(sc)
+    }
+
+    override fun sendError(sc: Int, msg: String) {
+        capturedStatus = sc
+        super.sendError(sc, msg)
     }
 
     /** Writes the buffered response body to the actual underlying response. */

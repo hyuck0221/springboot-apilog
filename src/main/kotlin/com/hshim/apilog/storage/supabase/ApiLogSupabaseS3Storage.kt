@@ -14,7 +14,6 @@ import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import tools.jackson.databind.ObjectMapper
 import java.io.BufferedWriter
 import java.io.StringWriter
 import java.net.URI
@@ -43,7 +42,6 @@ import kotlin.concurrent.withLock
  */
 class ApiLogSupabaseS3Storage(
     private val properties: ApiLogProperties,
-    private val objectMapper: ObjectMapper,
 ) : ApiLogStorage {
 
     private val log = LoggerFactory.getLogger(ApiLogSupabaseS3Storage::class.java)
@@ -127,7 +125,6 @@ class ApiLogSupabaseS3Storage(
                     writer = writer,
                     entries = entries,
                     format = s3Props.format,
-                    objectMapper = objectMapper,
                     writeHeader = true,
                 )
             }

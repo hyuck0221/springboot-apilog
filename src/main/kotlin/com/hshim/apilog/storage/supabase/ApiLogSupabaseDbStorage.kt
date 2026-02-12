@@ -5,10 +5,10 @@ import com.hshim.apilog.model.ApiLogEntry
 import com.hshim.apilog.storage.ApiLogStorage
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
+import com.hshim.apilog.internal.ApiLogMapper
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DriverManagerDataSource
-import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 
 /**
@@ -30,7 +30,6 @@ import java.sql.Timestamp
  */
 class ApiLogSupabaseDbStorage(
     private val properties: ApiLogProperties,
-    private val objectMapper: ObjectMapper,
 ) : ApiLogStorage {
 
     private val log = LoggerFactory.getLogger(ApiLogSupabaseDbStorage::class.java)
@@ -63,10 +62,11 @@ class ApiLogSupabaseDbStorage(
     }
 
     private fun createTableIfNotExists() {
+        val t = supabaseDbProps.tableName
         try {
             jdbcTemplate.execute(
                 """
-                CREATE TABLE IF NOT EXISTS ${supabaseDbProps.tableName} (
+                CREATE TABLE IF NOT EXISTS $t (
                     id                    VARCHAR(36)  PRIMARY KEY,
                     app_name              VARCHAR(255),
                     url                   TEXT         NOT NULL,
@@ -87,10 +87,15 @@ class ApiLogSupabaseDbStorage(
                 )
                 """.trimIndent(),
             )
-            log.info("Supabase DB table '${supabaseDbProps.tableName}' is ready.")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_request_time       ON $t (request_time)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_response_status     ON $t (response_status)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_method              ON $t (method)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_app_name            ON $t (app_name)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_processing_time_ms  ON $t (processing_time_ms)")
+            log.info("Supabase DB table '$t' is ready.")
         } catch (e: Exception) {
             log.warn(
-                "Could not create table '${supabaseDbProps.tableName}' in Supabase DB. " +
+                "Could not create table '$t' in Supabase DB. " +
                     "It may already exist or you may have insufficient permissions.",
                 e,
             )
@@ -111,8 +116,8 @@ class ApiLogSupabaseDbStorage(
             entry.appName,
             entry.url,
             entry.method,
-            objectMapper.writeValueAsString(entry.queryParams),
-            objectMapper.writeValueAsString(entry.requestHeaders),
+            ApiLogMapper.toJson(entry.queryParams),
+            ApiLogMapper.toJson(entry.requestHeaders),
             entry.requestBody,
             entry.responseStatus,
             entry.responseContentType,

@@ -1,0 +1,60 @@
+{
+  "groups": [
+    {
+      "name": "apilog",
+      "type": "com.hshim.apilog.config.ApiLogProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties"
+    },
+    {
+      "name": "apilog.storage",
+      "type": "com.hshim.apilog.config.ApiLogProperties$StorageProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties",
+      "sourceMethod": "getStorage()"
+    },
+    {
+      "name": "apilog.storage.db",
+      "type": "com.hshim.apilog.config.ApiLogProperties$DbStorageProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties$StorageProperties",
+      "sourceMethod": "getDb()"
+    },
+    {
+      "name": "apilog.storage.local-file",
+      "type": "com.hshim.apilog.config.ApiLogProperties$LocalFileStorageProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties$StorageProperties",
+      "sourceMethod": "getLocalFile()"
+    },
+    {
+      "name": "apilog.storage.supabase-db",
+      "type": "com.hshim.apilog.config.ApiLogProperties$SupabaseDbStorageProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties$StorageProperties",
+      "sourceMethod": "getSupabaseDb()"
+    },
+    {
+      "name": "apilog.storage.supabase-s3",
+      "type": "com.hshim.apilog.config.ApiLogProperties$SupabaseS3StorageProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties$StorageProperties",
+      "sourceMethod": "getSupabaseS3()"
+    },
+    {
+      "name": "apilog.view",
+      "type": "com.hshim.apilog.config.ApiLogProperties$ViewProperties",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties",
+      "sourceMethod": "getView()"
+    }
+  ],
+  "properties": [
+    {
+      "name": "apilog.exclude-paths",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Ant-style URL path patterns (wildcards supported) to exclude from logging.",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties"
+    },
+    {
+      "name": "apilog.mask-headers",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Request header names whose values are replaced with \"***\" in the log.",
+      "sourceType": "com.hshim.apilog.config.ApiLogProperties"
+    }
+  ],
+  "hints": []
+}

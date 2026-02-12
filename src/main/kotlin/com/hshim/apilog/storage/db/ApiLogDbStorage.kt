@@ -4,9 +4,9 @@ import com.hshim.apilog.config.ApiLogProperties
 import com.hshim.apilog.model.ApiLogEntry
 import com.hshim.apilog.storage.ApiLogStorage
 import jakarta.annotation.PostConstruct
+import com.hshim.apilog.internal.ApiLogMapper
 import org.slf4j.LoggerFactory
 import org.springframework.jdbc.core.JdbcTemplate
-import tools.jackson.databind.ObjectMapper
 import java.sql.Timestamp
 
 /**
@@ -22,7 +22,6 @@ import java.sql.Timestamp
 class ApiLogDbStorage(
     private val jdbcTemplate: JdbcTemplate,
     private val properties: ApiLogProperties,
-    private val objectMapper: ObjectMapper,
 ) : ApiLogStorage {
 
     private val log = LoggerFactory.getLogger(ApiLogDbStorage::class.java)
@@ -36,10 +35,11 @@ class ApiLogDbStorage(
     }
 
     private fun createTableIfNotExists() {
+        val t = dbProps.tableName
         try {
             jdbcTemplate.execute(
                 """
-                CREATE TABLE IF NOT EXISTS ${dbProps.tableName} (
+                CREATE TABLE IF NOT EXISTS $t (
                     id                    VARCHAR(36)  PRIMARY KEY,
                     app_name              VARCHAR(255),
                     url                   TEXT         NOT NULL,
@@ -60,10 +60,15 @@ class ApiLogDbStorage(
                 )
                 """.trimIndent(),
             )
-            log.info("ApiLog DB table '${dbProps.tableName}' is ready.")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_request_time       ON $t (request_time)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_response_status     ON $t (response_status)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_method              ON $t (method)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_app_name            ON $t (app_name)")
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_${t}_processing_time_ms  ON $t (processing_time_ms)")
+            log.info("ApiLog DB table '$t' is ready.")
         } catch (e: Exception) {
             log.warn(
-                "Could not create table '${dbProps.tableName}'. " +
+                "Could not create table '$t'. " +
                     "It may already exist or you may have insufficient permissions.",
                 e,
             )
@@ -84,8 +89,8 @@ class ApiLogDbStorage(
             entry.appName,
             entry.url,
             entry.method,
-            objectMapper.writeValueAsString(entry.queryParams),
-            objectMapper.writeValueAsString(entry.requestHeaders),
+            ApiLogMapper.toJson(entry.queryParams),
+            ApiLogMapper.toJson(entry.requestHeaders),
             entry.requestBody,
             entry.responseStatus,
             entry.responseContentType,

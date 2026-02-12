@@ -5,9 +5,9 @@ import com.hshim.apilog.model.ApiLogEntry
 import com.hshim.apilog.view.dto.ApiLogPage
 import com.hshim.apilog.view.dto.ApiLogQuery
 import com.hshim.apilog.view.dto.ApiLogStats
+import com.hshim.apilog.internal.ApiLogMapper
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
-import tools.jackson.databind.ObjectMapper
 import java.sql.ResultSet
 import java.time.LocalDateTime
 
@@ -20,7 +20,6 @@ import java.time.LocalDateTime
 class ApiLogViewService(
     private val jdbcTemplate: JdbcTemplate,
     private val properties: ApiLogProperties,
-    private val objectMapper: ObjectMapper,
 ) {
 
     private val table get() = properties.storage.db.tableName
@@ -123,7 +122,19 @@ class ApiLogViewService(
         q.appName?.let { conditions += "app_name = ?"; params += it }
         q.method?.let { conditions += "UPPER(method) = UPPER(?)"; params += it }
         q.url?.let { conditions += "url LIKE ?"; params += it }
-        q.statusCode?.let { conditions += "response_status = ?"; params += it }
+        q.statusCode?.let { code ->
+            val range = parseStatusCodeFilter(code)
+            if (range != null) {
+                conditions += "response_status >= ? AND response_status < ?"
+                params += range.first
+                params += range.second
+            } else {
+                val exact = code.toIntOrNull()
+                    ?: throw IllegalArgumentException("Invalid statusCode: '$code'. Use exact code (e.g. 200) or class pattern (e.g. 2XX).")
+                conditions += "response_status = ?"
+                params += exact
+            }
+        }
         q.startTime?.let { conditions += "request_time >= ?"; params += parseDateTime(it) }
         q.endTime?.let { conditions += "request_time <= ?"; params += parseDateTime(it) }
         q.minProcessingTimeMs?.let { conditions += "processing_time_ms >= ?"; params += it }
@@ -161,6 +172,17 @@ class ApiLogViewService(
             throw IllegalArgumentException("Invalid datetime format: '$value'. Expected ISO-8601, e.g. 2026-01-15T00:00:00")
         }
 
+    /**
+     * Parses a status-code class pattern like `2XX`, `3XX`, `4XX`, `5XX` into a half-open range.
+     * Returns `null` if the value is not a class pattern (treat as exact match).
+     */
+    private fun parseStatusCodeFilter(value: String): Pair<Int, Int>? {
+        val upper = value.uppercase()
+        val match = Regex("^([1-9])XX$").find(upper) ?: return null
+        val base = match.groupValues[1].toInt() * 100
+        return base to (base + 100)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun rowMapper(): RowMapper<ApiLogEntry> = RowMapper { rs: ResultSet, _ ->
         ApiLogEntry(
@@ -169,10 +191,10 @@ class ApiLogViewService(
             url = rs.getString("url"),
             method = rs.getString("method"),
             queryParams = rs.getString("query_params")
-                ?.let { objectMapper.readValue(it, Map::class.java) as Map<String, List<String>> }
+                ?.let { ApiLogMapper.fromJson(it, Map::class.java) as Map<String, List<String>> }
                 ?: emptyMap(),
             requestHeaders = rs.getString("request_headers")
-                ?.let { objectMapper.readValue(it, Map::class.java) as Map<String, String> }
+                ?.let { ApiLogMapper.fromJson(it, Map::class.java) as Map<String, String> }
                 ?: emptyMap(),
             requestBody = rs.getString("request_body"),
             responseStatus = rs.getInt("response_status"),

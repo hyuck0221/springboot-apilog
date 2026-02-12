@@ -1,7 +1,7 @@
 # apilog
 
 A Spring Boot + Kotlin library that automatically records every HTTP API request and response.
-Supports multiple storage backends simultaneously: **DB table**, **Supabase S3**, **local file**, and **HTTP push** to a central `apilog-view` server.
+Supports multiple storage backends simultaneously: **DB table**, **Supabase DB**, **Supabase S3**, and **local file**.
 
 [한국어](./README_KO.md)
 
@@ -11,9 +11,9 @@ Supports multiple storage backends simultaneously: **DB table**, **Supabase S3**
 
 | Component    | Version |
 |--------------|---------|
-| Spring Boot  | 4.0+    |
-| Kotlin       | 2.0+    |
-| Java         | 21+     |
+| Spring Boot  | 3.0+    |
+| Kotlin       | 1.9+    |
+| Java         | 17+     |
 
 > **DB storage** and **View API** additionally require `spring-boot-starter-jdbc` and a configured `DataSource`.
 
@@ -102,12 +102,6 @@ apilog:
       key-prefix: logs/
       logs-per-file: 1000
       format: JSON
-
-    http:
-      enabled: false
-      endpoint-url: http://apilog-view:8080/apilog/logs/receive
-      timeout-ms: 5000                   # Connection + read timeout (default: 5000 ms)
-      async: true                        # Fire-and-forget, non-blocking (default: true)
 
   view:
     enabled: false                       # Enable the built-in View API (default: false)
@@ -223,16 +217,6 @@ Uploads log files to [Supabase Storage](https://supabase.com/docs/guides/storage
 
 ---
 
-### HTTP (Push to apilog-view)
-
-Posts each log entry to a remote HTTP endpoint via JSON `POST`.
-
-- Designed to push logs from instrumented services to a central `apilog-view` server.
-- `async: true` (default) sends on a background virtual thread — request latency is not affected.
-- Failures are logged and silently dropped; they never propagate to the caller.
-
----
-
 ## View API (for apilog-view frontend)
 
 Enable on the **central log collection server** that `apilog-view` talks to:
@@ -246,6 +230,27 @@ apilog:
   view:
     enabled: true
     base-path: /apilog
+    api-key: your-secret-key          # Optional — leave blank for open access
+```
+
+### API Key Authentication
+
+When `apilog.view.api-key` is set to a non-blank value, **every request** to the View API
+must include the following header:
+
+```
+X-Api-Key: your-secret-key
+```
+
+| Condition                    | Result                  |
+|------------------------------|-------------------------|
+| `api-key` is blank (default) | Open access, no header required |
+| `api-key` is set, header matches | `200 OK` — request proceeds |
+| `api-key` is set, header missing or wrong | `401 Unauthorized` |
+
+**401 response body:**
+```json
+{"status": 401, "error": "Unauthorized", "message": "Invalid or missing X-Api-Key header"}
 ```
 
 ### Endpoints
@@ -292,15 +297,18 @@ apilog:
 
 ## Multi-Application Architecture
 
+The View API's `POST /apilog/logs/receive` endpoint can ingest log entries pushed from other services.
+Implement [Custom Storage Backend](#custom-storage-backend) in each service to forward logs to the central server.
+
 ```
- ┌─────────────────┐  HTTP POST /apilog/logs/receive
+ ┌─────────────────┐  POST /apilog/logs/receive
  │  order-service  │─────────────────────────────────┐
- │  (apilog lib)   │                                 │
+ │  (custom push)  │                                 │
  └─────────────────┘                                 ▼
                                            ┌──────────────────────┐
- ┌─────────────────┐  HTTP POST            │   apilog-view server │
+ ┌─────────────────┐  POST                 │   apilog-view server │
  │  user-service   │──────────────────────▶│   (apilog lib +      │
- │  (apilog lib)   │                       │    view.enabled=true) │
+ │  (custom push)  │                       │    view.enabled=true) │
  └─────────────────┘                       └──────────┬───────────┘
                                                       │ GET /apilog/logs/**
                                                       ▼
@@ -308,16 +316,6 @@ apilog:
                                            │   apilog-view        │
                                            │   (frontend)         │
                                            └──────────────────────┘
-```
-
-**order-service / user-service** `application.yml`
-```yaml
-apilog:
-  app-name: order-service   # or user-service
-  storage:
-    http:
-      enabled: true
-      endpoint-url: http://apilog-view-server:8080/apilog/logs/receive
 ```
 
 **apilog-view server** `application.yml`

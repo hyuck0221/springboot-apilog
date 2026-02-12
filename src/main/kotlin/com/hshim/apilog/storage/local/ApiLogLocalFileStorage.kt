@@ -8,10 +8,12 @@ import com.hshim.apilog.storage.file.ApiLogFileWriter
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
-import tools.jackson.databind.ObjectMapper
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -28,7 +30,6 @@ import kotlin.concurrent.withLock
  */
 class ApiLogLocalFileStorage(
     private val properties: ApiLogProperties,
-    private val objectMapper: ObjectMapper,
 ) : ApiLogStorage {
 
     private val log = LoggerFactory.getLogger(ApiLogLocalFileStorage::class.java)
@@ -37,6 +38,7 @@ class ApiLogLocalFileStorage(
     private val buffer = mutableListOf<ApiLogEntry>()
     private val lock = ReentrantLock()
     private val fileCounter = AtomicInteger(0)
+    private var scheduler: ScheduledExecutorService? = null
 
     @PostConstruct
     fun init() {
@@ -45,6 +47,27 @@ class ApiLogLocalFileStorage(
             dir.mkdirs()
         }
         log.info("ApiLog local file storage initialized. Directory: ${dir.absolutePath}")
+
+        val interval = localProps.flushIntervalSeconds
+        if (interval > 0) {
+            scheduler = Executors.newSingleThreadScheduledExecutor { r ->
+                Thread(r, "apilog-file-flush").apply { isDaemon = true }
+            }
+            scheduler!!.scheduleAtFixedRate(
+                {
+                    lock.withLock {
+                        if (buffer.isNotEmpty()) {
+                            flushToFile(buffer.toList())
+                            buffer.clear()
+                        }
+                    }
+                },
+                interval,
+                interval,
+                TimeUnit.SECONDS,
+            )
+            log.info("ApiLog local file storage will flush every ${interval}s.")
+        }
     }
 
     override fun save(entry: ApiLogEntry) {
@@ -59,6 +82,7 @@ class ApiLogLocalFileStorage(
 
     @PreDestroy
     fun shutdown() {
+        scheduler?.shutdownNow()
         lock.withLock {
             if (buffer.isNotEmpty()) {
                 flushToFile(buffer.toList())
@@ -81,7 +105,6 @@ class ApiLogLocalFileStorage(
                     writer = writer,
                     entries = entries,
                     format = localProps.format,
-                    objectMapper = objectMapper,
                     writeHeader = true,
                 )
             }

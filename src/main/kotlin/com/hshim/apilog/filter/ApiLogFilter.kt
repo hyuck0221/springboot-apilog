@@ -31,7 +31,7 @@ class ApiLogFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        if (!properties.enabled || isExcluded(request.requestURI)) {
+        if (!properties.enabled || !isIncluded(request.requestURI) || isExcluded(request.requestURI)) {
             filterChain.doFilter(request, response)
             return
         }
@@ -62,6 +62,12 @@ class ApiLogFilter(
                 wrappedResponse.copyBodyToResponse()
             }
         }
+    }
+
+    /** Returns true when the URI should be logged (passes the include-paths whitelist). */
+    private fun isIncluded(uri: String): Boolean {
+        if (properties.includePaths.isEmpty()) return true
+        return properties.includePaths.any { pattern -> pathMatcher.match(pattern, uri) }
     }
 
     private fun isExcluded(uri: String): Boolean =

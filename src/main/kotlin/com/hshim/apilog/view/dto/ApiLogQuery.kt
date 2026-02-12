@@ -14,8 +14,11 @@ data class ApiLogQuery(
     /** Filter by URL path — supports `%` wildcard (SQL LIKE). */
     val url: String? = null,
 
-    /** Filter by HTTP response status code. */
-    val statusCode: Int? = null,
+    /**
+     * Filter by HTTP response status code.
+     * Supports exact match (e.g. `200`) or class patterns (e.g. `2XX`, `3XX`, `4XX`, `5XX`).
+     */
+    val statusCode: String? = null,
 
     /**
      * Filter entries with `requestTime` on or after this timestamp.
