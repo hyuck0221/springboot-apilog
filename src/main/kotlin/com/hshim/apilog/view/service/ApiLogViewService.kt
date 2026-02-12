@@ -107,8 +107,8 @@ class ApiLogViewService(
             countByMethod = countByMethod,
             countByStatus = countByStatus,
             countByAppName = countByAppName,
-            avgProcessingTimeMs = avg ?: 0.0,
-            maxProcessingTimeMs = max ?: 0L,
+            avgProcessingTimeMs = avg,
+            maxProcessingTimeMs = max,
             p99ProcessingTimeMs = p99,
         )
     }
@@ -121,7 +121,7 @@ class ApiLogViewService(
 
         q.appName?.let { conditions += "app_name = ?"; params += it }
         q.method?.let { conditions += "UPPER(method) = UPPER(?)"; params += it }
-        q.url?.let { conditions += "url LIKE ?"; params += it }
+        q.url?.let { conditions += "url LIKE CONCAT('%', ?, '%')"; params += it }
         q.statusCode?.let { code ->
             val range = parseStatusCodeFilter(code)
             if (range != null) {
