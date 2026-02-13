@@ -37,6 +37,12 @@ class APIDocumentController(
     fun status(): Map<String, Boolean> = mapOf("enabled" to true)
 
     /**
+     * Returns a list of all unique categories found in the registered API routes.
+     */
+    @GetMapping("/categories")
+    fun categories(): List<String> = documentComponent.getCategories()
+
+    /**
      * Returns a paginated list of API routes registered in this application.
      *
      * All filter parameters are optional and combined with AND logic.

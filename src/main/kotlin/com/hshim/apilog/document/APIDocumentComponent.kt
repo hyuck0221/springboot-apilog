@@ -36,12 +36,13 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
      * Populated once during initialization, never modified afterward
      */
     private var apiInfoCache: List<APIInfoResponse> = emptyList()
+    private var categoryCache: List<String> = emptyList()
     private val logger = LoggerFactory.getLogger(APIDocumentComponent::class.java)
 
     init {
         // Build cache at application startup
         getSwaggerAnnotatedApis()
-        logger.info("API cache initialized with ${apiInfoCache.size} endpoints")
+        logger.info("API cache initialized with ${apiInfoCache.size} endpoints and ${categoryCache.size} categories")
     }
 
     /**
@@ -49,6 +50,11 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
      * Zero-cost operation after initialization
      */
     fun getAPIInfos() = apiInfoCache.takeIf { it.isNotEmpty() } ?: getSwaggerAnnotatedApis()
+
+    /**
+     * Get all cached unique categories
+     */
+    fun getCategories() = categoryCache
 
     private fun getSwaggerAnnotatedApis(): List<APIInfoResponse> {
         val result = mutableListOf<APIInfoResponse>()
@@ -150,6 +156,10 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
         }
 
         apiInfoCache = result
+        categoryCache = result.map { it.category }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
         return result
     }
 
