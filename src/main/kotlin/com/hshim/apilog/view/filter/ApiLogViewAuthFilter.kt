@@ -26,8 +26,15 @@ class ApiLogViewAuthFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val expectedKey = properties.view.apiKey
-        val providedKey = request.getHeader(HEADER_NAME)
+        val expectedKey = properties.view.apiKey.trim()
+
+        // apiKey가 설정되지 않은 경우 인증 건너뜀
+        if (expectedKey.isBlank()) {
+            filterChain.doFilter(request, response)
+            return
+        }
+
+        val providedKey = request.getHeader(HEADER_NAME)?.trim()
 
         if (providedKey != expectedKey) {
             response.status = HttpServletResponse.SC_UNAUTHORIZED

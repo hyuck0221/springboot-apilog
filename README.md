@@ -106,6 +106,9 @@ apilog:
   view:
     enabled: false                       # Enable the built-in View API (default: false)
     base-path: /apilog                   # Base path for all View API endpoints
+    api-key: ""                          # Optional API key — leave blank for open access
+    document:
+      enabled: false                     # Enable the API document endpoint (default: false)
 ```
 
 ---
@@ -292,6 +295,85 @@ X-Api-Key: your-secret-key
   "p99ProcessingTimeMs": 890
 }
 ```
+
+---
+
+## API Document
+
+Exposes the **registered API routes of this application** as a searchable, paginated list.
+Useful for lightweight API browsing without Swagger/OpenAPI.
+
+### Requirements
+
+- `apilog.view.enabled=true`
+- `apilog.view.document.enabled=true`
+- `spring-data-commons` on the classpath (included with `spring-boot-starter-data-jpa` or similar)
+
+```yaml
+apilog:
+  view:
+    enabled: true
+    base-path: /apilog
+    document:
+      enabled: true
+```
+
+> Endpoints share the same base path and are protected by the same `api-key` as the View API.
+
+### Endpoints
+
+| Method | Path                            | Description                              |
+|--------|---------------------------------|------------------------------------------|
+| GET    | `/apilog/document/status`       | Check whether the document API is active |
+| GET    | `/apilog/document`              | Paginated & searchable list of API routes |
+
+### GET /apilog/document — Query Parameters
+
+| Parameter  | Type   | Description                                                               |
+|------------|--------|---------------------------------------------------------------------------|
+| `keyword`  | String | Full-text search across `url`, `title`, and `description` (case-insensitive) |
+| `category` | String | Filter by category (exact match, case-insensitive)                        |
+| `method`   | String | Filter by HTTP method, e.g. `GET`, `POST` (case-insensitive)             |
+| `page`     | Int    | 0-based page number (default: `0`)                                        |
+| `size`     | Int    | Items per page (default: `20`)                                            |
+
+### GET /apilog/document — Response
+
+```json
+{
+  "content": [
+    {
+      "url": "/api/users",
+      "method": "GET",
+      "category": "User",
+      "title": "Get user list",
+      "description": "Returns a paginated list of users",
+      "requestSchema": { "page": "int", "size": "int" },
+      "responseSchema": { "id": "Long", "name": "String" },
+      "requestInfos": [
+        { "path": "page", "type": "int", "description": "page number", "nullable": true, "parameterType": "QUERY" }
+      ],
+      "responseInfos": [
+        { "path": "id", "type": "Long", "description": "", "nullable": false, "parameterType": null }
+      ]
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 42,
+  "totalPages": 3
+}
+```
+
+> API routes are scanned and cached **once at startup**. Only endpoints annotated with `@Operation` (OpenAPI 3.x) or `@ApiOperation` (Swagger 2.x) are included.
+
+### GET /apilog/document/status — Response
+
+```json
+{ "enabled": true }
+```
+
+Returns `404 Not Found` when `apilog.view.document.enabled=false`.
 
 ---
 

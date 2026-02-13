@@ -1,5 +1,6 @@
 package com.hshim.apilog.internal
 
+import com.fasterxml.jackson.core.json.JsonWriteFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
@@ -18,6 +19,7 @@ internal object ApiLogMapper {
         .addModule(KotlinModule.Builder().build())
         .addModule(JavaTimeModule())
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        .disable(JsonWriteFeature.ESCAPE_NON_ASCII)
         .build()
 
     fun toJson(value: Any): String = mapper.writeValueAsString(value)

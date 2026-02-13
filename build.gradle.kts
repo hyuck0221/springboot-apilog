@@ -35,6 +35,9 @@ dependencies {
     // Optional: JDBC for DB storage — consumer must add spring-boot-starter-jdbc
     compileOnly("org.springframework.boot:spring-boot-starter-jdbc")
 
+    // Optional: Spring Data for Pageable/Page support in APIDocumentComponent
+    compileOnly("org.springframework.data:spring-data-commons")
+
     // AWS SDK v2 for Supabase S3 (S3-compatible storage)
     implementation(platform("software.amazon.awssdk:bom:2.28.0"))
     implementation("software.amazon.awssdk:s3")

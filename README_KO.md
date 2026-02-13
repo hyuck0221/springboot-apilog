@@ -106,6 +106,9 @@ apilog:
   view:
     enabled: false                       # View API 활성화 여부 (기본값: false)
     base-path: /apilog                   # View API 기본 경로
+    api-key: ""                          # API 키 — 비워두면 인증 없이 접근 가능
+    document:
+      enabled: false                     # API 문서 엔드포인트 활성화 여부 (기본값: false)
 ```
 
 ---
@@ -289,6 +292,86 @@ X-Api-Key: your-secret-key
   "p99ProcessingTimeMs": 890
 }
 ```
+
+---
+
+## API 문서
+
+이 애플리케이션에 등록된 **API 경로 목록을 검색·페이지네이션하여 제공**하는 기능입니다.
+Swagger/OpenAPI 없이 간단한 API 브라우징이 필요할 때 활용할 수 있습니다.
+
+### 요구 사항
+
+- `apilog.view.enabled=true`
+- `apilog.view.document.enabled=true`
+- 클래스패스에 `spring-data-commons` 필요 (`spring-boot-starter-data-jpa` 등에 포함)
+
+```yaml
+apilog:
+  view:
+    enabled: true
+    base-path: /apilog
+    document:
+      enabled: true
+```
+
+> 엔드포인트는 View API와 동일한 기본 경로를 사용하며, 동일한 `api-key` 인증이 적용됩니다.
+
+### 엔드포인트 목록
+
+| 메서드 | 경로                            | 설명                                 |
+|--------|---------------------------------|--------------------------------------|
+| GET    | `/apilog/document/status`       | API 문서 기능 활성화 여부 확인        |
+| GET    | `/apilog/document`              | 페이지네이션 및 검색 가능한 API 목록  |
+
+### GET /apilog/document — 쿼리 파라미터
+
+| 파라미터   | 타입   | 설명                                                                       |
+|------------|--------|----------------------------------------------------------------------------|
+| `keyword`  | String | `url`, `title`, `description` 전체 텍스트 검색 (대소문자 무관)             |
+| `category` | String | 카테고리 필터 (대소문자 무관 완전 일치)                                     |
+| `method`   | String | HTTP 메서드 필터, 예: `GET`, `POST` (대소문자 무관)                        |
+| `page`     | Int    | 0부터 시작하는 페이지 번호 (기본값: `0`)                                   |
+| `size`     | Int    | 페이지 당 항목 수 (기본값: `20`)                                           |
+
+### GET /apilog/document — 응답 예시
+
+```json
+{
+  "content": [
+    {
+      "url": "/api/users",
+      "method": "GET",
+      "category": "User",
+      "title": "사용자 목록 조회",
+      "description": "페이지네이션된 사용자 목록을 반환합니다",
+      "requestSchema": { "page": "int", "size": "int" },
+      "responseSchema": { "id": "Long", "name": "String" },
+      "requestInfos": [
+        { "path": "page", "type": "int", "description": "페이지 번호", "nullable": true, "parameterType": "QUERY" }
+      ],
+      "responseInfos": [
+        { "path": "id", "type": "Long", "description": "", "nullable": false, "parameterType": null }
+      ]
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 42,
+  "totalPages": 3
+}
+```
+
+> API 경로는 **애플리케이션 시작 시 한 번 스캔되어 캐싱**됩니다.
+> `@Operation` (OpenAPI 3.x) 또는 `@ApiOperation` (Swagger 2.x) 어노테이션이 붙은 엔드포인트만 포함됩니다.
+
+### GET /apilog/document/status — 응답
+
+```json
+{ "enabled": true }
+```
+
+`apilog.view.document.enabled=false`이면 `404 Not Found`를 반환합니다.
 
 ---
 

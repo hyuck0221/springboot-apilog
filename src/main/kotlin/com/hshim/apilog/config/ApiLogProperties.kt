@@ -178,5 +178,19 @@ data class ApiLogProperties(
          * Leave blank to disable authentication (open access). Default: "" (disabled)
          */
         val apiKey: String = "",
+
+        val document: DocumentProperties = DocumentProperties(),
+    )
+
+    // ── Document API ──────────────────────────────────────────────────────────
+
+    data class DocumentProperties(
+        /**
+         * Enable the API document endpoint which exposes this application's registered API routes
+         * as a searchable, paginated list.
+         * Requires `apilog.view.enabled=true` and `spring-data-commons` on the classpath.
+         * Default: false
+         */
+        val enabled: Boolean = false,
     )
 }

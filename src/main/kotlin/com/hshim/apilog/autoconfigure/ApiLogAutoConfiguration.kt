@@ -1,6 +1,8 @@
 package com.hshim.apilog.autoconfigure
 
 import com.hshim.apilog.config.ApiLogProperties
+import com.hshim.apilog.document.APIDocumentComponent
+import com.hshim.apilog.document.APIDocumentController
 import com.hshim.apilog.filter.ApiLogFilter
 import com.hshim.apilog.storage.ApiLogStorage
 import com.hshim.apilog.storage.db.ApiLogDbStorage
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
@@ -25,6 +28,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.Ordered
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 
 /**
  * Spring Boot auto-configuration entry point for the apilog library.
@@ -144,6 +148,36 @@ class ApiLogAutoConfiguration {
         @Bean
         fun apiLogFileController(fileService: ApiLogFileService): ApiLogFileController =
             ApiLogFileController(fileService)
+    }
+
+    /**
+     * Sub-configuration for the API Document endpoint.
+     *
+     * Activated when ALL of the following are true:
+     * - `apilog.view.enabled=true`
+     * - `apilog.view.document.enabled=true`
+     * - `spring-data-commons` (Pageable) is on the classpath
+     *
+     * **Endpoints:**
+     * ```
+     * GET {basePath}/document/status   Check whether the document API is enabled
+     * GET {basePath}/document          Paginated & searchable list of registered API routes
+     * ```
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnExpression("\${apilog.view.enabled:false} && \${apilog.view.document.enabled:false}")
+    @ConditionalOnClass(name = ["org.springframework.data.domain.Pageable"])
+    class DocumentConfiguration {
+
+        @Bean
+        fun apiDocumentComponent(
+            handlerMapping: RequestMappingHandlerMapping,
+        ): APIDocumentComponent = APIDocumentComponent(handlerMapping)
+
+        @Bean
+        fun apiDocumentController(
+            documentComponent: APIDocumentComponent,
+        ): APIDocumentController = APIDocumentController(documentComponent)
     }
 
     @Configuration(proxyBeanMethods = false)
