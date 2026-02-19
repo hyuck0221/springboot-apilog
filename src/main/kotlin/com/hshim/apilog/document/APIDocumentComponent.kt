@@ -92,6 +92,29 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
                             requestSchema["size"] = "int"
                             requestSchema["sort"] = "String"
                         }
+                        // List 타입 처리
+                        List::class.java.isAssignableFrom(param.type) -> {
+                            val genericType = param.parameterizedType
+                            val description = extractParameterDescription(param)
+                            if (genericType is ParameterizedType) {
+                                val innerTypeArg = genericType.actualTypeArguments.firstOrNull()
+                                val innerClass = when (innerTypeArg) {
+                                    is Class<*> -> innerTypeArg
+                                    is ParameterizedType -> innerTypeArg.rawType as Class<*>
+                                    else -> Any::class.java
+                                }
+                                val typeName = "List<${innerClass.simpleName}>"
+                                requestInfos.add(FieldInfo(param.name, typeName, description, false, paramType))
+                                requestSchema[param.name] = typeName
+                                if (!isSimpleType(innerClass)) {
+                                    requestInfos.addAll(extractFieldInfos(innerClass, paramType, "${param.name}[]"))
+                                    requestSchema["${param.name}[]"] = buildSchema(innerClass)
+                                }
+                            } else {
+                                requestInfos.add(FieldInfo(param.name, "List", description, false, paramType))
+                                requestSchema[param.name] = "List"
+                            }
+                        }
                         // @PathVariable 처리
                         paramType == ParameterType.PATH -> {
                             val pathVariableName = getPathVariableName(param)
@@ -581,14 +604,13 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
         return when (type) {
             is ParameterizedType -> {
                 val rawType = type.rawType as Class<*>
-                if (rawType == Page::class.java || rawType == List::class.java) {
+                if (rawType == Page::class.java || List::class.java.isAssignableFrom(rawType)) {
                     val innerType = type.actualTypeArguments.firstOrNull()
-                    val innerSchema = if (innerType is Class<*>) {
-                        buildSchema(innerType)
-                    } else if (innerType is ParameterizedType) {
-                        buildSchemaFromType(innerType)
-                    } else {
-                        mapOf("item" to "Any")
+                    val innerSchema = when {
+                        innerType is Class<*> && isSimpleType(innerType) -> innerType.simpleName
+                        innerType is Class<*> -> buildSchema(innerType)
+                        innerType is ParameterizedType -> buildSchemaFromType(innerType)
+                        else -> "Any"
                     }
 
                     if (rawType == Page::class.java) {
@@ -612,7 +634,14 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
                 }
             }
 
-            is Class<*> -> buildSchema(type)
+            is Class<*> -> {
+                if (List::class.java.isAssignableFrom(type)) {
+                    listOf("Any")
+                } else {
+                    buildSchema(type)
+                }
+            }
+
             else -> emptyMap<String, Any>()
         }
     }
@@ -675,7 +704,7 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
         return when (type) {
             is ParameterizedType -> {
                 val rawType = type.rawType as Class<*>
-                if (rawType == Page::class.java || rawType == List::class.java) {
+                if (rawType == Page::class.java || List::class.java.isAssignableFrom(rawType)) {
                     val innerType = type.actualTypeArguments.firstOrNull()
                     val clazz = when (innerType) {
                         is Class<*> -> innerType
@@ -684,6 +713,7 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
                     }
 
                     val fields = mutableListOf<FieldInfo>()
+                    val itemPrefix = if (rawType == Page::class.java) "content" else "items"
 
                     if (rawType == Page::class.java) {
                         fields.add(FieldInfo("content", rawType.simpleName, "페이지 컨텐츠", false, paramType))
@@ -693,20 +723,25 @@ class APIDocumentComponent(private val handlerMapping: RequestMappingHandlerMapp
                         fields.add(FieldInfo("number", "int", "현재 페이지 번호", false, paramType))
                     }
 
-                    fields.addAll(
-                        extractFieldInfos(
-                            clazz,
-                            paramType,
-                            if (rawType == Page::class.java) "content" else "items"
-                        )
-                    )
+                    if (isSimpleType(clazz) || clazz == Any::class.java) {
+                        fields.add(FieldInfo(itemPrefix, clazz.simpleName, "리스트 아이템", false, paramType))
+                    } else {
+                        fields.addAll(extractFieldInfos(clazz, paramType, itemPrefix))
+                    }
                     fields
                 } else {
                     extractFieldInfos(rawType, paramType, prefix)
                 }
             }
 
-            is Class<*> -> extractFieldInfos(type, paramType, prefix)
+            is Class<*> -> {
+                if (List::class.java.isAssignableFrom(type)) {
+                    listOf(FieldInfo("items", "Any", "리스트 아이템", false, paramType))
+                } else {
+                    extractFieldInfos(type, paramType, prefix)
+                }
+            }
+
             else -> emptyList()
         }
     }

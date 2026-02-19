@@ -29,7 +29,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.hyuck0221:apilog:0.0.1")
+    implementation("com.github.hyuck0221:apilog:1.0.1")
 }
 ```
 
